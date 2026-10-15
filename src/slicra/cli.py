@@ -103,10 +103,13 @@ def collect_overrides(config_data: dict[str, Any], **opts: Any) -> dict[str, Any
 
     yaml_mode = (config_data.get("detection") or {}).get("mode")
     if det and "mode" not in det and yaml_mode is None:
-        det["mode"] = "grid" if ({"rows", "cols"} & det.keys()) else "auto"
-    if det.get("mode") == "template" and len(det) > 2:
-        extra = {k: v for k, v in det.items() if k not in ("mode", "template")}
-        det = {"mode": "template", "template": det["template"], "overrides": extra}
+        det["mode"] = infer_mode(det)
+    mode = det.get("mode", yaml_mode)
+    params = {k: v for k, v in det.items() if k not in ("mode", "template")}
+    if mode == "template" and params:
+        det = {k: v for k, v in det.items() if k in ("mode", "template")} | {"overrides": params}
+    elif mode in (None, "auto") and params:
+        det = {k: v for k, v in det.items() if k == "mode"} | route_auto(params)
 
     ext: dict[str, Any] = {}
     _set(ext, "shape", opts.get("shape"))
@@ -131,6 +134,45 @@ def collect_overrides(config_data: dict[str, Any], **opts: Any) -> dict[str, Any
         if value:
             overrides[key] = value
     return overrides
+
+
+GRID_KEYS = {"rows", "cols", "gap_x", "gap_y", "margins", "cell_width", "cell_height"}
+GRID_AUTO_KEYS = {"background", "tolerance", "rows", "cols"}
+CONTOURS_KEYS = {"background", "threshold", "min_area"}
+
+
+def infer_mode(det: dict[str, Any]) -> str:
+    """Pick a detector from the flags used when neither --mode nor YAML sets one.
+
+    Grid geometry flags select ``grid``; ``--tolerance`` selects ``grid-auto``;
+    ``--threshold``/``--min-area`` select ``contours``; anything else stays ``auto``.
+    """
+    keys = set(det)
+    if keys & GRID_KEYS and "tolerance" not in keys:
+        return "grid"
+    if "tolerance" in keys and keys <= GRID_AUTO_KEYS:
+        return "grid-auto"
+    if keys & {"threshold", "min_area"} and keys <= CONTOURS_KEYS:
+        return "contours"
+    return "auto"
+
+
+def route_auto(params: dict[str, Any]) -> dict[str, Any]:
+    """Send detector flags to the auto strategies that understand them."""
+    unknown = set(params) - GRID_AUTO_KEYS - CONTOURS_KEYS
+    if unknown:
+        raise ConfigError(
+            f"option(s) {sorted(unknown)} need an explicit --mode (auto mode does not use them)",
+            hint="add --mode grid, grid-auto, contours or manual",
+        )
+    routed: dict[str, Any] = {}
+    grid_auto = {k: v for k, v in params.items() if k in GRID_AUTO_KEYS}
+    contours = {k: v for k, v in params.items() if k in CONTOURS_KEYS}
+    if grid_auto:
+        routed["grid_auto"] = grid_auto
+    if contours:
+        routed["contours"] = contours
+    return routed
 
 
 def _int(value: str, flag: str) -> int:
@@ -384,7 +426,7 @@ def extract(
                     f"{len(batch.failures)} failure(s) -> {batch.output_dir}"
                 )
             if batch.failures:
-                raise typer.Exit(3 if batch.results else 4)
+                raise typer.Exit(batch.exit_code)
             return
         result = slicer.extract(source, output, preview=preview_flag)
     except SlicraError as exc:

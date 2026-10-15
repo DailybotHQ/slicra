@@ -107,7 +107,7 @@ class GridDetection(StrictModel):
         for row, col in self.exclude:
             if not (1 <= row <= self.rows and 1 <= col <= self.cols):
                 raise ValueError(f"exclude cell ({row}, {col}) is outside the {self.rows}x{self.cols} grid")
-        if len(self.exclude) >= self.rows * self.cols:
+        if len(set(self.exclude)) >= self.rows * self.cols:
             raise ValueError("exclude removes every cell of the grid")
         return self
 
@@ -450,7 +450,7 @@ def builtin_templates() -> dict[str, str]:
 
 def _read_template(name: str) -> tuple[dict[str, Any], str]:
     candidate = Path(name)
-    if candidate.suffix in (".yaml", ".yml") or candidate.exists():
+    if candidate.suffix in (".yaml", ".yml") or "/" in name or "\\" in name:
         if not candidate.is_file():
             raise ValueError(f"template file not found: {name}")
         return _safe_yaml(candidate.read_text(encoding="utf-8"), str(candidate)), str(candidate)
@@ -489,14 +489,16 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
 def merge_overrides(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
     """Apply CLI/API overrides on top of YAML data.
 
-    When the override switches ``detection.mode``, the YAML detection block is
-    dropped instead of merged: its keys belong to a different detector.
+    When the override switches ``detection.mode`` (or switches to another
+    ``template``), the YAML detection block is dropped instead of merged: its
+    keys belong to a different detector or preset.
     """
     base = copy.deepcopy(base)
     det_override = overrides.get("detection")
     if isinstance(det_override, dict) and "mode" in det_override:
         current = base.get("detection") or {}
-        if not isinstance(current, dict) or current.get("mode") != det_override["mode"]:
+        switched = not isinstance(current, dict) or current.get("mode") != det_override["mode"]
+        if switched or current.get("template") != det_override.get("template", current.get("template")):
             base["detection"] = {}
     return deep_merge(base, overrides)
 

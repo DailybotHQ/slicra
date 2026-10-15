@@ -38,13 +38,21 @@ class LoadedImage:
 
 def normalize_mode(image: Image.Image) -> Image.Image:
     """Return an ``RGB`` or ``RGBA`` image, preserving any transparency."""
-    if image.mode in ("RGB", "RGBA"):
+    has_alpha = image.mode in ("LA", "La", "PA") or "transparency" in image.info
+    if image.mode == "RGBA" or (image.mode == "RGB" and not has_alpha):
         return image
     if image.mode == "RGBa":
         return image.convert("RGBA")
-    has_alpha = image.mode in ("LA", "La", "PA") or "transparency" in image.info
-    if image.mode in ("I;16", "I;16B", "I;16L", "I"):
+    if image.mode in ("I;16", "I;16B", "I;16L"):
         image = image.point(lambda v: v / 256).convert("L")
+    elif image.mode in ("I", "F"):
+        lo, hi = image.getextrema()
+        assert isinstance(lo, (int, float)) and isinstance(hi, (int, float))
+        if image.mode == "I" and lo >= 0 and hi <= 255:
+            image = image.convert("L")
+        else:
+            span = (hi - lo) or 1
+            image = image.point(lambda v: (v - lo) * 255 / span).convert("L")
     if image.mode == "P" and has_alpha:
         return image.convert("RGBA")
     return image.convert("RGBA" if has_alpha else "RGB")

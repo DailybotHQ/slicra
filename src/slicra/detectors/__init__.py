@@ -48,12 +48,16 @@ def available_detectors() -> list[str]:
     return sorted([*_REGISTRY, "auto"])
 
 
+DOUBTFUL = frozenset({"background-not-uniform", "region-covers-image", "grid-auto-small-band"})
+
+
 def detect_auto(image: Image.Image, cfg: AutoDetection) -> DetectionResult:
     """Try ``cfg.strategies`` in order; keep the first result that is trustworthy.
 
     A strategy is accepted when it returns at least one region, a score of at
-    least ``min_score`` and no ``*-irregular``/``background-not-uniform``
-    warnings. ``grid-auto`` is additionally required to find densely filled
+    least ``min_score`` and no ``*-irregular`` warning nor any warning in
+    ``DOUBTFUL`` (non-uniform background, a region covering the image, dropped
+    content bands). ``grid-auto`` is additionally required to find densely filled
     cells (mean fill >= ``min_fill``): sparse objects separated by background
     are better served by ``contours``. Every attempt is recorded in ``details["attempts"]``.
     """
@@ -69,9 +73,7 @@ def detect_auto(image: Image.Image, cfg: AutoDetection) -> DetectionResult:
             continue
         except ValueError as exc:
             raise ConfigError(f"detection.{strategy.replace('-', '_')}: {exc}") from None
-        doubtful = [
-            w.code for w in result.warnings if w.code.endswith("-irregular") or w.code == "background-not-uniform"
-        ]
+        doubtful = [w.code for w in result.warnings if w.code.endswith("-irregular") or w.code in DOUBTFUL]
         score = result.score or 0.0
         sparse = strategy == "grid-auto" and result.details.get("mean_fill", 1.0) < cfg.min_fill
         if sparse:

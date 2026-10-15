@@ -177,10 +177,19 @@ class BatchResult:
     output_dir: Path
     results: list[ExtractionResult]
     failures: dict[Path, str]
+    failure_codes: dict[Path, int] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
         return not self.failures
+
+    @property
+    def exit_code(self) -> int:
+        """0 when every image succeeded, otherwise the exit code of the first failure."""
+        if not self.failures:
+            return 0
+        first = next(iter(self.failures))
+        return self.failure_codes.get(first, 1)
 
     @property
     def region_count(self) -> int:

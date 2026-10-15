@@ -15,7 +15,9 @@ Safety rules:
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -82,11 +84,32 @@ def plan_outputs(regions: list[Region], config: Config, output_dir: Path, stem: 
         if key in reserved:
             raise ExportError(f"region file name {filename!r} collides with the preview/manifest name")
         seen[key] = region.id
-        target = (root / filename).resolve()
+        target = safe_target(root / filename, root)
         if target.parent != root:
             raise ExportError(f"refusing to write outside the output directory: {filename!r}")
         paths.append(target)
     return paths
+
+
+def same_file(a: Path, b: Path) -> bool:
+    """True when two paths name the same file (follows symlinks, case-insensitive filesystems)."""
+    try:
+        if a.exists() and b.exists():
+            return os.path.samefile(a, b)
+    except OSError:
+        pass
+    return os.path.normcase(str(a.resolve())).casefold() == os.path.normcase(str(b.resolve())).casefold()
+
+
+def safe_target(path: Path, root: Path) -> Path:
+    """Resolve ``path`` and require it to stay inside ``root`` and not to be a symlink."""
+    if path.is_symlink():
+        raise ExportError(f"refusing to write through a symbolic link: {path}")
+    resolved = path.resolve()
+    root = root.resolve()
+    if resolved != root and root not in resolved.parents:
+        raise ExportError(f"refusing to write outside the output directory: {path}")
+    return resolved
 
 
 def check_conflicts(paths: list[Path], overwrite: bool) -> None:
@@ -129,9 +152,16 @@ def save_image(image: Image.Image, path: Path, config: Config) -> list[Detection
 
 
 def write_atomic_text(path: Path, text: str) -> None:
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+    """Write via a fresh, uniquely named temp file in the same directory, then rename."""
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.replace(tmp_name, path)
+    except BaseException:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+        raise
 
 
 def build_manifest(

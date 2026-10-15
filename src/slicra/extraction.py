@@ -42,13 +42,16 @@ def shape_spec(extraction: Extraction, override: dict[str, Any] | None = None) -
 
 
 def crop_box_for(region: Region, spec: ShapeSpec, padding: int, image_size: tuple[int, int]) -> BBox:
-    box = region.bbox.expand(padding, *image_size)
     if spec.shape == "circle" and spec.circle_fit == "center-square":
-        side = min(box.width, box.height)
-        left = box.left + (box.width - side) // 2
-        top = box.top + (box.height - side) // 2
-        box = BBox(left, top, left + side, top + side)
-    return box
+        # Square centered on the region (not on the clamped padded box), then kept inside the image.
+        width, height = image_size
+        b = region.bbox
+        side = min(min(b.width, b.height) + 2 * padding, width, height)
+        cx2, cy2 = b.left + b.right, b.top + b.bottom  # doubled centers keep integer math exact
+        left = min(max(0, (cx2 - side) // 2), width - side)
+        top = min(max(0, (cy2 - side) // 2), height - side)
+        return BBox(left, top, left + side, top + side)
+    return region.bbox.expand(padding, *image_size)
 
 
 def resize_image(image: Image.Image, resize: Resize, background: tuple[int, int, int] | None) -> Image.Image:

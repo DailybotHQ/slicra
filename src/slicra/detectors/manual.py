@@ -56,15 +56,18 @@ def detect_manual(image_size: tuple[int, int], cfg: ManualDetection) -> Detectio
     specs = list(cfg.regions)
     if cfg.regions_file is not None:
         specs += load_regions_file(cfg.regions_file)
-    ids = [s.id for s in specs if s.id]
+    ids = [s.id or f"m{n:03d}" for n, s in enumerate(specs, start=1)]
     dupes = sorted({i for i in ids if ids.count(i) > 1})
     if dupes:
-        raise ConfigError(f"duplicate manual region ids: {dupes}")
+        raise ConfigError(
+            f"duplicate manual region ids: {dupes}",
+            hint="default ids are m001, m002... by position; give every region a unique id",
+        )
 
     warnings: list[DetectionWarning] = []
     regions: list[Region] = []
     for n, spec in enumerate(specs, start=1):
-        rid = spec.id or f"m{n:03d}"
+        rid = ids[n - 1]
         polygon: Polygon | None = None
         if spec.rect is not None:
             left, top, right, bottom = spec.rect

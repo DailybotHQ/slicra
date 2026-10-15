@@ -15,6 +15,7 @@ pytest suite; how to run, scope and extend it is in
 | `test_cli.py` | every command, overrides precedence, exit codes, batch and `--flat` |
 | `test_api.py` | documented API flow, in-memory use, templates, auto selection, extension point |
 | `test_end_to_end.py` | example configs, preview = export regions, source untouched, EXIF, bad inputs, limits, batch safety |
+| `test_regressions.py` | one test per bug found in the pre-release review (path safety, batch collisions, transparency keys, config precedence, auto acceptance) |
 | `test_skill.py` | Agent Skill frontmatter, links, and that documented commands exist |
 | `test_packaging.py` | `slow`: build wheel/sdist, install in a clean venv, run the CLI |
 | `test_real_samples.py` | `real`: optional local avatar sheets via `SLICRA_SAMPLES` |

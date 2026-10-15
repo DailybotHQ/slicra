@@ -13,7 +13,15 @@ from PIL import Image
 from .config import Config, build_config, load_config
 from .detectors import run_detector
 from .errors import ConfigError, ExportError, NoRegionsError, SlicraError
-from .export import build_manifest, check_conflicts, plan_outputs, save_image, write_manifest
+from .export import (
+    build_manifest,
+    check_conflicts,
+    plan_outputs,
+    safe_target,
+    same_file,
+    save_image,
+    write_manifest,
+)
 from .extraction import extract_regions
 from .imageio import LoadedImage, iter_images, load_image
 from .models import BatchResult, DetectionResult, DetectionWarning, ExtractedRegion, ExtractionResult
@@ -78,6 +86,10 @@ class ImageSlicer:
         )
         if output is not None:
             target = Path(output)
+            if target.is_symlink():
+                raise ExportError(f"refusing to write through a symbolic link: {target}")
+            if loaded.path is not None and same_file(target, loaded.path):
+                raise ExportError(f"refusing to overwrite the input image {loaded.path}")
             if target.exists() and not self.config.output.overwrite:
                 raise ExportError(f"{target} already exists", hint="pass --overwrite or choose another path")
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -106,11 +118,14 @@ class ImageSlicer:
         stem: str | None = None,
         preview_path: str | Path | None = None,
         manifest_path: str | Path | None = None,
+        reserved: set[str] | None = None,
     ) -> ExtractionResult:
         """Detect, export every region, the optional preview and the manifest.
 
         ``preview_path``/``manifest_path`` override the default locations
         (``<output_dir>/preview.png`` and ``<output_dir>/manifest.json``).
+        ``reserved`` (used by batch runs) holds paths already written in the same
+        run; colliding with one is an error even with ``overwrite``.
         """
         config = self.config
         out = Path(output_dir) if output_dir is not None else config.output.directory
@@ -126,17 +141,26 @@ class ImageSlicer:
         name_stem = stem or (loaded.path.stem if loaded.path else "image")
         outputs = plan_outputs(detection.regions, config, out, name_stem)
         root = out.resolve()
-        preview_target = Path(preview_path).resolve() if preview_path else root / config.preview.filename
-        manifest_target = Path(manifest_path).resolve() if manifest_path else root / config.manifest.filename
+        preview_target = safe_target(Path(preview_path) if preview_path else root / config.preview.filename, root)
+        manifest_target = safe_target(Path(manifest_path) if manifest_path else root / config.manifest.filename, root)
         preview_out = preview_target if want_preview else None
         planned = outputs + [p for p in (preview_out,) if p is not None]
         if config.manifest.enabled:
             planned.append(manifest_target)
-        if len({p.as_posix().lower() for p in planned}) != len(planned):
+        if len({p.as_posix().casefold() for p in planned}) != len(planned):
             raise ExportError("output, preview and manifest paths collide")
-        if loaded.path is not None and loaded.path.resolve() in planned:
+        if loaded.path is not None and any(same_file(p, loaded.path) for p in planned):
             raise ExportError(f"refusing to overwrite the input image {loaded.path}")
+        if reserved is not None:
+            clashes = [p for p in planned if p.as_posix().casefold() in reserved]
+            if clashes:
+                raise ExportError(
+                    f"{clashes[0].name} was already written by another image in this batch",
+                    hint="include {stem} in output.naming or rename the colliding inputs",
+                )
         check_conflicts(planned, overwrite)
+        if reserved is not None:
+            reserved.update(p.as_posix().casefold() for p in planned)
 
         root.mkdir(parents=True, exist_ok=True)
         for extra in (preview_out, manifest_target if config.manifest.enabled else None):
@@ -204,7 +228,7 @@ class ImageSlicer:
         images = iter_images(directory, exclude=out)
         if not images:
             raise ConfigError(f"no supported images found in {directory}")
-        stems = [p.stem for p in images]
+        keys = batch_keys(images)
         runner = self
         if flat and "{stem" not in self.config.output.naming:
             naming = "{stem}_" + self.config.output.naming
@@ -213,8 +237,9 @@ class ImageSlicer:
             )
         results: list[ExtractionResult] = []
         failures: dict[Path, str] = {}
-        for path in images:
-            key = path.stem if stems.count(path.stem) == 1 else f"{path.stem}_{path.suffix.lstrip('.').lower()}"
+        codes: dict[Path, int] = {}
+        written: set[str] = set()
+        for path, key in zip(images, keys, strict=True):
             try:
                 if flat:
                     result = runner.extract(
@@ -225,10 +250,34 @@ class ImageSlicer:
                         stem=key,
                         preview_path=out / "_previews" / f"{key}.png",
                         manifest_path=out / "_manifests" / f"{key}.json",
+                        reserved=written,
                     )
                 else:
-                    result = runner.extract(path, out / key, overwrite=overwrite, preview=preview, stem=path.stem)
+                    result = runner.extract(
+                        path, out / key, overwrite=overwrite, preview=preview, stem=path.stem, reserved=written
+                    )
                 results.append(result)
             except SlicraError as exc:
                 failures[path] = str(exc)
-        return BatchResult(output_dir=out.resolve(), results=results, failures=failures)
+                codes[path] = exc.exit_code
+        return BatchResult(output_dir=out.resolve(), results=results, failures=failures, failure_codes=codes)
+
+
+def batch_keys(images: list[Path]) -> list[str]:
+    """Unique, case-insensitive per-image keys for batch output folders/prefixes.
+
+    The key is the file stem; stems shared by several files (``a.png``/``a.jpg``)
+    get the extension appended, and any remaining clash gets ``_2``, ``_3``...
+    """
+    stems = [p.stem.casefold() for p in images]
+    keys: list[str] = []
+    taken: set[str] = set()
+    for path, folded in zip(images, stems, strict=True):
+        key = path.stem if stems.count(folded) == 1 else f"{path.stem}_{path.suffix.lstrip('.').lower()}"
+        candidate, n = key, 2
+        while candidate.casefold() in taken:
+            candidate = f"{key}_{n}"
+            n += 1
+        taken.add(candidate.casefold())
+        keys.append(candidate)
+    return keys

@@ -53,6 +53,7 @@ seconds.
 | `skills/slicra/` | `tests/test_skill.py` (+ `agentskills validate skills/slicra` when installed) |
 | `examples/configs/`, `examples/generate_fixtures.py` | `tests/test_end_to_end.py`, `tests/conftest.py` |
 | `pyproject.toml`, package data | `tests/test_packaging.py` |
+| path safety, batch keys, config precedence (cross-cutting) | `tests/test_regressions.py` |
 
 **Consumer policy.** There is no affected-tests tool; the import graph is small. `config.py`,
 `models.py`, `pipeline.py`, `errors.py` and `tests/conftest.py` are shared by everything, so a
