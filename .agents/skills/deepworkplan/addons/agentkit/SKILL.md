@@ -1,0 +1,263 @@
+---
+name: deepworkplan-addon-agentkit
+description: Optional DeepWorkPlan addon that integrates coding-agents-kit (the `ak` command, DailybotHQ/coding-agents-kit pinned at v1.0.1, interface 1) as the headless delegation transport - a thin integrator that detects the kit through `ak doctor --json`, offers it (never imposes it) from onboard Phase 7b, documents the install from a clone of the pinned tag plus the kit's install.sh, records the acceptance in the .dwp/config.json addon registry, and maps a v7 plan's delegation operations (launch, observe, collect, cancel) onto one `ak run` per delegate in a dedicated git worktree. Never required, never a conformance gate. The kit launches agents in autonomy by default and its opt-out (--ask or AGENTKIT_PERMISSIONS=ask) always wins; the pack spells no CLI autonomy flag, never passes --auto, and passes --ask always for a read-only delegate and for writing delegates when a plan records the opt-out.
+version: "7.8.1"
+documentation_url: https://deepworkplan.com/kit/agentkit
+user-invocable: true
+allowed-tools: Bash, Read, Grep, Glob, Edit, Write
+metadata: {"openclaw":{"emoji":"🧰","homepage":"https://deepworkplan.com/kit/agentkit","requires":{"anyBins":["git"]}}}
+---
+
+# DeepWorkPlan — agentkit Addon (headless delegation transport)
+
+Integrate **coding-agents-kit** — one command surface (`ak`) for every
+terminal coding agent (claude, codex, cursor, opencode, pi, cline, grok and
+their provider variants, multiple accounts through profiles) — as the
+**headless** transport a v7 plan may use to delegate a `parallel_safe`
+task. This is an **opt-in addon**, never required for a repo to be
+AI-first and never a conformance gate: without it every task runs in the
+current session exactly as before.
+
+This addon is a **thin integrator**. The kit is its own product
+(`https://github.com/DailybotHQ/coding-agents-kit`, MIT, works without
+DWP); everything this addon relies on is the kit's frozen **interface 1**
+(`ak run`, `ak env`, `ak doctor --json`, the exit codes) at the pinned tag.
+
+| Pin | Value |
+|-----|-------|
+| Product | `DailybotHQ/coding-agents-kit` |
+| Tag | `v1.0.1` (autonomy by default since `v0.2.0`; accounts, `ak usage`, `ak pick`, `ak profiles --json`, `--trust-cwd` and the `agentkit-orchestrate` skill since `v0.5.0`; Cursor's Linux login and Claude's `keychain` login kind since `v0.5.1`; a default account per CLI, `AGENTKIT_DEFAULT_PROFILE_<CLI>`, since `v0.5.2`; Codex started with `--no-daemon` when a shared home records a daemon from another machine, since `v0.5.3`; `ak capacity` with its usage cache, `ak lease` and `ak pick --owner` since `v0.6.0`; `ak capacity --self` inside Codex lanes, `ak pick --owner` counting the owner's own leases with `--reuse @profile` for a successor, one account per kind and profile, and Grok folder trust since `v0.6.1`; Antigravity quota and every account listed in `ak usage` since `v0.7.0`; a profile's suffixed credential variable counted as its login since `v0.7.1`; the first stable release, its interface committed to semantic versioning, `v1.0.0`; every profile, `@default` included, its own account inside a devcontainer-kit container, since `v1.0.1`) |
+| Interface | `1` (`ak doctor --json` → `"interface": 1`) |
+| Registry key | `agentkit` (`.dwp/config.json` → `addons.agentkit`) |
+| Transport | `headless` — provides `subagents`, `cancel_children`, `model_routing`; requires the `agent_delegation` grant |
+
+## Read these first (all relative inside the skill)
+
+- [`SPEC.md`](SPEC.md) — the normative contract: detection, offer,
+  install, the transport mapping, the permission rules.
+- [`templates/INTEGRATION.md`](templates/INTEGRATION.md) — reasoning
+  guidance for one delegate end to end (worktree, prompt, run, collect).
+- `../../execute/delegation.md` — when a plan may delegate at all.
+
+## When this runs
+
+- **`onboard` Phase 7b** offers it as an explicit opt-in when the developer
+  wants a plan to hand bounded tasks to other coding agents.
+- **`execute`** uses it only through `delegation.md`, only on a v7 plan whose
+  contract grants `agent_delegation`, only for a `parallel_safe` task (or a
+  read-only delegate), and only when `resources.py abilities` shows
+  `addon:agentkit` as a `subagents` source.
+- Direct invocation, to install or check the kit.
+
+## Trust boundary (write scope)
+
+`allowed-tools` includes write-capable `Edit`, `Write`, and `Bash`. The
+write scope is bounded:
+
+- **Before consent: read-only.** Detection is `command -v ak` and
+  `ak doctor --json` (key **names** only, never values).
+- **Writes (only after explicit acceptance):** the kit install through its
+  own pinned installer, the `addons.agentkit` registry entry, and — during a
+  delegation — a dedicated git worktree for the delegate plus the collected
+  result under the plan's `analysis_results/delegations/<id>/`.
+- **It MUST NOT:** spell a CLI autonomy flag (they stay in the kit's
+  `providers.toml`) or pass `--auto` (autonomy is already the kit's
+  default) — `--ask` is the one flag it passes: always for a read-only
+  delegate (no worktree, `--cwd` the repository), and for a writing
+  delegate when the plan records the opt-out; drop or override an `--ask` /
+  `AGENTKIT_PERMISSIONS=ask` opt-out; read, print or write any provider key
+  value; let a delegate write outside its worktree; install a coding-agent
+  CLI unasked (`ak install` is the developer's call); run a delegate the
+  ledger refused; or treat a delegate's result as evidence.
+
+## Permissions (the kit's, never the pack's)
+
+Since `v0.2.0` the kit launches every agent in **autonomy by default**: `ak`
+adds the CLI's own autonomy flag, kept only in the kit's `providers.toml`.
+The **opt-out always wins**: `--ask` on the command, or
+`AGENTKIT_PERMISSIONS=ask` set by the developer (in the environment or the
+kit's env file) or inherited from an opted-out session, suppresses the flag even when the same command says `--auto` and
+even when the kit's env file says `AGENTKIT_PERMISSIONS=auto`. Autonomy is
+meant for disposable or sandboxed environments, such as a dev container.
+
+For delegation this means: a plan that grants `agent_delegation` on a host
+accepts autonomous delegates confined to their own worktree, which is not a
+sandbox. Say so when asking for the grant and offer the opt-out. When the
+plan records it, launch each delegate with `ak run --ask …`; a delegate in
+ask mode has no terminal, so it may stop at its first prompt, and
+`--timeout` bounds it.
+
+**Read-only intent means ask.** A read-only delegate (research, review,
+analysis) gets no worktree and runs in the repository itself, so it is
+**always** launched with `--ask`, whatever the plan records — autonomy
+there would approve writes in the developer's checkout. Writing delegates
+keep the autonomy default inside their own worktree, and the opt-out still
+wins for them.
+
+## The flow
+
+### Step 0 — Detect (read-only)
+
+`command -v ak` → `ak doctor --json` → read `interface` (must be `1`;
+anything else is one warning and "not available"), `permissions` (`auto`
+or `ask` — how delegates will launch), the installed kinds and whether each
+is logged in (file presence only), and the profile names. No state installs
+anything.
+
+### Step 1 — Offer (never impose)
+
+Explain what it adds — a plan may hand a bounded `parallel_safe` task to
+another coding agent, in its own worktree, and verify the result with its
+own gates — and what it costs: a machine-level install, provider accounts
+you already have, per-plan consent (`agent_delegation`), and agents that run
+in autonomy unless you opt out (`--ask` / `AGENTKIT_PERMISSIONS=ask`).
+Declining is a complete answer.
+
+### Step 2 — Install (pinned; point-don't-run by default)
+
+```
+git clone --branch v1.0.1 https://github.com/DailybotHQ/coding-agents-kit
+./coding-agents-kit/install.sh
+```
+
+Before running the installer, check the tag and the release's `SHA256SUMS`
+(pinned digest, at least one file verified) as
+[`../machine-installs.md`](../machine-installs.md) shows.
+
+(Windows: the same tagged clone, then `.\coding-agents-kit\install.ps1`.)
+The installer touches no network, installs no CLI and never overwrites the
+env file. Run it yourself only interactively and with explicit acceptance;
+re-detect afterwards.
+
+### Step 3 — Record
+
+`python3 ../../shared/config.py enable agentkit --version v1.0.1 --repo <repo>`.
+Delegation still needs each plan's contract to grant `agent_delegation` —
+enabling the addon grants nothing.
+
+### Step 4 — Transport (during execute)
+
+One delegate = one `ak run` in one dedicated worktree
+(`templates/INTEGRATION.md`):
+
+| Operation | Mapping |
+|-----------|---------|
+| launch | `git worktree add <wt> -b dwp/<plan>/<delegation_id>`; record `ledger.py delegate launch` (with `prompt_digest`); start `ak run <kind> @<profile> --cwd <wt> --timeout <s> --output-format json [--ask] -- "<prompt>"` in the background, stdout to the result file (`--ask` when the plan records the opt-out; always for a read-only delegate, `--cwd` the repository) |
+| observe | `ledger.py delegate observe`; the background process is alive or has exited |
+| collect | on exit read the one JSON object (`exit` 0 → `completed`, otherwise `failed`); `ledger.py delegate collect` with `result_path`; integrate the worktree's diff; run the task's gates here |
+| cancel | send SIGTERM to `ak run` (the kit kills the whole process tree, exit 5); `ledger.py delegate cancel` |
+
+## Accounts and lanes (coding-agents-kit `v0.5.0` and later)
+
+Beyond one headless delegate, the kit is how a lead spreads lanes over the
+developer's accounts (`../../guide/orchestration-at-scale.md` §16):
+
+- **Accounts.** One CLI × one profile. `@default` is the CLI's own home;
+  `@name` lives under the profiles root. `ak profiles` lists them (login
+  yes/no, key **names**); `ak profiles --json` emits schema `profiles-v1`.
+  Since `v0.5.1` a Claude login is reported as `file` only with
+  `.credentials.json`, `keychain` when the macOS Keychain item exists,
+  `none` when neither does (for example `@default` copied into a container
+  without its token) and `unknown` when the Keychain cannot be asked —
+  presence only, the secret is never read. A Cursor login on Linux (a
+  container or Linux host, `~/.config/cursor/auth.json`) is recognised by
+  `ak usage` and `ak doctor`.
+- **Default account per CLI (`v0.5.2`).** `AGENTKIT_DEFAULT_PROFILE_<CLI>`
+  (environment or env file) names the account a bare `ak <cli>`, `ak run
+  <cli>` and `ak env <cli>` use; a positional `@profile`, `AGENTKIT_PROFILE`
+  or an explicit `@default` wins, and the profile must exist. In a dev
+  container it comes from devcontainer-kit's host-profile
+  `[agents] default_profile`. The addon never relies on it for a delegate:
+  every `ak run` it launches names the chosen `@<profile>` explicitly
+  (`@default` for the CLI's own home), so the
+  account recorded in the lane table and in `delegate launch` is the one
+  that ran.
+- **Every profile is its own account (`v1.0.1`).** Each ak profile,
+  `@default` included, is an independent account — also inside a
+  devcontainer-kit container, where `@default` is no longer merged into a
+  named profile — so `ak usage` lists `@default` and `ak <cli> @default`
+  launches the CLI's own home.
+- **A Codex home shared across machines (`v0.5.3`).** A host profile shared
+  into a container, or one volume shared by several containers, can record
+  an app-server daemon installed by another machine; Codex then refused to
+  start. An interactive `ak codex` adds `--no-daemon` only when the recorded
+  daemon is missing here or built for another OS
+  (`AGENTKIT_CODEX_NO_DAEMON=1` forces it); `ak doctor` reports each
+  account's daemon state.
+- **Quota.** `ak usage --json` reports every account's windows and status —
+  once per batch, never in a loop (each call contacts the vendors). From
+  `v0.6.0`, an agent's own room comes from the cached `ak capacity` below.
+- **Choice.** `ak pick <kind> --count N` returns up to N accounts with room,
+  best first (`--exclude @p`, `--model <m>`, `--need 5h:40`); exit 1 means
+  none qualifies and names the soonest reset. The lead records each pick in
+  the plan's lane table.
+- **Claude token per profile.** `CLAUDE_CODE_OAUTH_TOKEN` (`@default`) and
+  `CLAUDE_CODE_OAUTH_TOKEN_<SUFFIX>` (`@name`) live in the kit's env file and
+  reach only that profile's Claude; a named profile never falls back.
+  Handled by name only.
+- **Pre-trusted folder.** `ak <kind> @p --trust-cwd` (or
+  `AGENTKIT_TRUST_CWD=1`) pre-trusts the launch folder, so a lane started in
+  a pane shows no folder-trust screen. Claude's per-profile
+  bypass-permissions acknowledgement is the developer's one-time step when
+  the profile is created; no agent answers it.
+- **The lead's loop** is the kit's own `agentkit-orchestrate` skill
+  (`ak --skill orchestrate`): inventory, pick, run, verify, fail over,
+  report the spend. This addon adds only the plan side — the lane table,
+  the journal record and the plan's gates.
+
+Using an account is never a reason to look past an opt-out: `--ask` and
+`AGENTKIT_PERMISSIONS=ask` win in every lane too.
+
+## Capacity and leases (coding-agents-kit `v0.6.0` and later)
+
+What lets a swarm hand work on before an account runs out
+(`../../guide/swarm.md` §17):
+
+- **Own capacity.** `ak capacity --self --json` (schema `capacity-v1`) gives
+  the running account's `headroom_pct`, `binding_window`, `resets_at` and a
+  `verdict` — `ok`, `low` (≤ 25 %), `critical` (≤ 10 % or rate-limited) or
+  `unknown` (no quota source: cursor, grok; Antigravity from `v0.7.0` where its login file is readable, not the macOS Keychain) — with `pick`'s
+  arithmetic, read from a 300 s usage cache so a check at every task
+  boundary stays cheap. `--self` resolves the account `ak` launched; outside
+  an `ak` launch it exits 3 and never guesses. The pack never calls it
+  directly: `../../shared/swarm.py capacity` wraps it and turns the verdict
+  into `continue`, `prepare` or `handoff` (capacity *unknown*, never *ok*,
+  without the kit or with an older one).
+- **Thresholds and drills.** `AGENTKIT_CAPACITY_LOW` / `_CRITICAL` (or
+  `--low` / `--critical`) move the thresholds; `AGENTKIT_CAPACITY_CAP=@p=PCT`
+  can only lower a reading — it is how a drill makes an account look poor,
+  and it can never make one look richer.
+- **Leases.** `ak lease <kind> @<profile> --owner <addr> [--ttl …]` holds an
+  account for one lane (a Codex profile takes one lease: one writer per auth
+  file); `ak lease release …` frees it once a successor accepted the
+  handoff; `ak lease ls` lists them. `ak pick <kind> --owner <lead>` skips
+  accounts leased to others and ranks the rest by `headroom / (1 + leases)`.
+  Leases are advisory records — numbers, profile names and pane addresses,
+  never a credential.
+- **The pool.** Work moves only among the accounts the developer declared
+  for the plan, within each vendor's terms: no agent creates an account,
+  renews a login or spends a Codex reset.
+
+With an older kit, the developer assigns accounts and an agent reads its own
+room once per task boundary with `ak usage <kind> @<profile> --json`.
+
+## Failure-mode guardrails
+
+- **Never required, never blocking.** Not installed, not logged in, unknown
+  interface, refused by the ledger: run the task in this session.
+- **The result is a claim.** `result_text` is what the agent said; only the
+  plan's own gate runner turns the work into `observed` evidence.
+- **Secrets stay names.** Provider keys are environment variable names; the
+  kit never prints values and neither does this addon.
+
+## Validation checklist (component 4 — mirrored from SPEC §8)
+
+1. `SKILL.md`, `SPEC.md`, `addon.json`, `templates/INTEGRATION.md` exist;
+   the descriptor pins `DailybotHQ/coding-agents-kit` `v1.0.1`, interface 1,
+   transport `headless`.
+2. Detection is read-only and reports `interface` 1, or one warning.
+3. Install used the pinned tagged clone + `install.sh`; nothing piped.
+4. The registry entry exists only after acceptance.
+5. Every writing delegate ran in its own worktree (`--ask` when the plan
+   records the opt-out) and every read-only one with `--ask`; no autonomy
+   flag was spelled by the addon, and each result was gated here.

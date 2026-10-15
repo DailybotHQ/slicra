@@ -1,0 +1,14 @@
+{
+  "addons": {
+    "ai-diff-reviewer": {
+      "enabled": true,
+      "version": "v3.3.14"
+    },
+    "dependency-upgrade": {
+      "enabled": true
+    }
+  },
+  "host": {
+    "subagents": true
+  }
+}

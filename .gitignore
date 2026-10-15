@@ -21,3 +21,10 @@ output/
 Thumbs.db
 .idea/
 .vscode/
+
+# Deep Work Plan output (plans stay local; the addon registry is shared)
+.dwp/*
+!.dwp/config.json
+
+# Scratch space for throwaway work
+tmp/
