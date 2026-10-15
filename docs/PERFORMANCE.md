@@ -26,8 +26,8 @@ These numbers are indicative, not guarantees.
 
 ## Known costs
 
-- `grid-auto` with `silhouette: true` flood-fills each tile in Python (`ImageDraw.floodfill`):
-  roughly linear in tile pixels, noticeable above ~1 MP per tile.
+- `grid-auto` with `silhouette: true` measures four corner diagonals per tile (a few hundred
+  pixel reads) and draws one supersampled rounded rectangle: negligible next to PNG encoding.
 - Large outputs with `resize` use LANCZOS; `contain` adds a canvas composite.
 - PNG encoding dominates export time for big crops; WebP/JPEG are faster to write.
 

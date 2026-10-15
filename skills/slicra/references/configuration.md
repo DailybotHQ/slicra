@@ -12,7 +12,7 @@ after EXIF rotation; boxes are `[left, top, right, bottom]` with exclusive right
 | mode | key options |
 | --- | --- |
 | `grid` | `rows`, `cols`, `margins: {left, top, right, bottom}`, `gap_x`, `gap_y` (int or a list of cols-1 / rows-1 values), `cell_width`, `cell_height`, `exclude: [[row, col], ...]` (1-based) |
-| `grid-auto` | `background: auto\|transparent\|"#RRGGBB"`, `tolerance` (0-255, default 24), `max_separator_fill` (0.02), `min_gap` (2), `min_cell_size` (8), `rows`/`cols` (expected counts, fail on mismatch), `skip_empty` (true), `silhouette` (false: per-tile mask so `shape: original` keeps rounded corners) |
+| `grid-auto` | `background: auto\|transparent\|"#RRGGBB"`, `tolerance` (0-255, default 24), `max_separator_fill` (0.02), `min_gap` (2), `min_cell_size` (8), `rows`/`cols` (expected counts, fail on mismatch), `skip_empty` (true), `silhouette` (false; true fits a rounded-rectangle mask to each tile so `shape: original` keeps rounded corners transparent) |
 | `contours` | `background`, `threshold: auto\|0-255`, `background_tolerance` (16), `alpha_threshold` (8), `min_area` (64), `max_area`, `connectivity: 4\|8`, `holes: keep\|fill`, `morphology: {open, close, kernel}` |
 | `manual` | `regions: [{id, rect: [l, t, r, b]} \| {id, polygon: [[x, y], ...]}]`, optional per-region `shape`, `star`, `circle_fit`; `regions_file` (YAML/JSON); `out_of_bounds: error\|clip`; `overlap: allow\|warn\|error` |
 | `auto` | `strategies: [grid-auto, contours]`, `min_score` (0.6), `min_fill` (0.85), `grid_auto: {...}`, `contours: {...}` |

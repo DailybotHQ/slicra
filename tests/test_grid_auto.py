@@ -49,6 +49,25 @@ def test_empty_cell_is_skipped_with_warning(fixtures) -> None:
     assert any(w.code == "grid-auto-empty-cells" for w in result.warnings)
 
 
+def test_silhouette_never_cuts_background_colored_content_at_the_edge(tmp_path) -> None:
+    """Regression: a light sweater touching a tile corner must stay opaque."""
+    bg = (248, 250, 253)
+    image = Image.new("RGB", (220, 100), bg)
+    draw = ImageDraw.Draw(image)
+    for left in (10, 120):
+        draw.rounded_rectangle((left, 10, left + 89, 89), radius=12, fill=(90, 120, 160))
+    # first tile: background-colored "sweater" filling its bottom-left corner area
+    draw.rectangle((10, 60, 50, 89), fill=(246, 249, 252))
+    slicer = ImageSlicer.from_dict(
+        {"detection": {"mode": "grid-auto", "silhouette": True}, "extraction": {"shape": "original"}}
+    )
+    [first, second] = slicer.render(image)
+    alpha = first.image.getchannel("A")
+    assert alpha.getpixel((20, 75)) == 255 and alpha.getpixel((2, 60)) == 255, "content kept opaque"
+    assert alpha.getpixel((0, 0)) == 0, "rounded corner (measured on clean corners) is transparent"
+    assert second.image.getchannel("A").getpixel((45, 45)) == 255
+
+
 def test_silhouette_keeps_rounded_corners_transparent(tmp_path) -> None:
     image = Image.new("RGB", (220, 100), (248, 250, 253))
     draw = ImageDraw.Draw(image)

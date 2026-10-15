@@ -27,7 +27,10 @@ cells have that exact size from the start margin; leftover space is reported
    band sizes). The best wins; no candidate → `DetectionError`.
 4. **Validate.** Expected `rows`/`cols` mismatch → error. Variation > 15% →
    `grid-auto-irregular`. Cells with < 1% foreground are empty (skipped with a warning by
-   default). `silhouette: true` adds a hole-filled per-tile mask for `shape: original`.
+   default). `silhouette: true` adds a per-tile rounded-rectangle mask for `shape: original`: the corner
+   radius is measured on the diagonal of each tile corner (gap = `r * (1 - 1/sqrt(2))`) and the
+   smallest of the four is used, so tile content that matches the background (a white shirt
+   touching the edge) can never be cut out.
 
 Calibrated on real 5 x 5 avatar sheets (1254 px, light background, gaps 11-17 px): all 25 tiles
 per sheet found, ~20 ms per sheet.

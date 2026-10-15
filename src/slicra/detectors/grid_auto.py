@@ -14,7 +14,8 @@ Algorithm (Pillow only, deterministic):
    ``min_gap`` are absorbed into content; content bands narrower than
    ``min_cell_size`` are dropped with a warning.
 5. Every row band x column band is a cell; empty cells are skipped (with a
-   warning) when ``skip_empty`` is set.
+   warning) when ``skip_empty`` is set. With ``silhouette`` each tile gets a
+   rounded-rectangle mask whose radius is measured on its corners.
 
 The detector refuses to guess: no separators means an error, and irregular
 band sizes or a mismatch with expected ``rows``/``cols`` are reported instead
@@ -23,6 +24,7 @@ of being silently "fixed".
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from statistics import mean, pstdev
 
@@ -104,13 +106,34 @@ def _bands(
     return _Bands(background, uniformity, source, mask, rows, cols, wx + wy)
 
 
-def filled_silhouette(mask: Image.Image) -> Image.Image:
-    """Fill interior holes of a binary mask: keep everything not reachable from the border."""
-    padded = Image.new("L", (mask.width + 2, mask.height + 2), 0)
-    padded.paste(mask, (1, 1))
-    ImageDraw.floodfill(padded, (0, 0), 128)
-    inside = padded.point(lambda v: 0 if v == 128 else 255)
-    return inside.crop((1, 1, mask.width + 1, mask.height + 1))
+def corner_radius(mask: Image.Image) -> int:
+    """Estimate the corner radius of a (rounded) rectangular tile from its binary mask.
+
+    Along each corner's diagonal, the background gap before the first foreground pixel is
+    ``r * (1 - 1/sqrt(2))`` for a circular corner of radius ``r``. The smallest of the four
+    corners is used: content that happens to match the background (a white shirt touching
+    a corner) can only make a corner look *more* rounded, never less.
+    """
+    w, h = mask.size
+    limit = min(w, h) // 2
+    corners = ((0, 0, 1, 1), (w - 1, 0, -1, 1), (0, h - 1, 1, -1), (w - 1, h - 1, -1, -1))
+    radii = []
+    for x0, y0, dx, dy in corners:
+        gap = next((i for i in range(limit) if mask.getpixel((x0 + dx * i, y0 + dy * i))), limit)
+        radii.append(round(gap / (1 - 1 / math.sqrt(2))))
+    return min(min(radii), limit)
+
+
+def tile_silhouette(size: tuple[int, int], radius: int, supersample: int = 4) -> Image.Image:
+    """Anti-aliased rounded-rectangle mask covering the whole tile."""
+    w, h = size
+    if radius <= 0:
+        return Image.new("L", size, 255)
+    big = Image.new("L", (w * supersample, h * supersample), 0)
+    ImageDraw.Draw(big).rounded_rectangle(
+        (0, 0, w * supersample - 1, h * supersample - 1), radius=radius * supersample, fill=255
+    )
+    return big.resize(size, Image.Resampling.BOX)
 
 
 def detect_grid_auto(image: Image.Image, cfg: GridAutoDetection) -> DetectionResult:
@@ -184,7 +207,7 @@ def detect_grid_auto(image: Image.Image, cfg: GridAutoDetection) -> DetectionRes
                 empty += 1
                 if cfg.skip_empty:
                     continue
-            silhouette = filled_silhouette(cell_mask) if cfg.silhouette else None
+            silhouette = tile_silhouette((box.width, box.height), corner_radius(cell_mask)) if cfg.silhouette else None
             regions.append(
                 Region(
                     id=f"r{r:02d}c{c:02d}",
