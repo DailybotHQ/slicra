@@ -34,6 +34,7 @@ def test_linked_references_exist() -> None:
 
 
 def test_skill_commands_exist_in_cli() -> None:
+    import typer
     from typer.testing import CliRunner
 
     from slicra.cli import app
@@ -41,4 +42,7 @@ def test_skill_commands_exist_in_cli() -> None:
     _meta, body = frontmatter()
     for command in sorted(set(re.findall(r"slicra (\w+)", body)) - {"inspect"} | {"inspect"}):
         assert CliRunner().invoke(app, [command, "--help"]).exit_code == 0, command
-    assert "--flat" in CliRunner().invoke(app, ["extract", "--help"]).output
+    # Inspect the registered options, not the rendered help: Rich adds ANSI codes in CI terminals.
+    extract = typer.main.get_command(app).commands["extract"]  # type: ignore[attr-defined]
+    options = {opt for param in extract.params for opt in param.opts}
+    assert "--flat" in options
