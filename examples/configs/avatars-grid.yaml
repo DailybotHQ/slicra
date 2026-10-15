@@ -1,0 +1,29 @@
+# Example 1: 5x5 avatar sheet with an explicit grid.
+# Generate the input first: python examples/generate_fixtures.py
+# The 12px gaps are a property of THIS synthetic image, not a universal default.
+version: 1
+input:
+  path: examples/input/avatars-grid.png
+detection:
+  mode: grid
+  rows: 5
+  cols: 5
+  margins: {left: 0, top: 0, right: 0, bottom: 0}
+  gap_x: 12
+  gap_y: 12
+extraction:
+  shape: rectangle
+  crop_padding: 0
+output:
+  directory: output/avatars
+  format: png
+  naming: "avatar_{index:03d}"
+  overwrite: false
+  resize:
+    width: 256
+    height: 256
+    mode: contain
+preview:
+  enabled: true
+manifest:
+  enabled: true

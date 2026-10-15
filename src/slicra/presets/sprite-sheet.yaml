@@ -1,0 +1,7 @@
+description: Disjoint sprites/stickers on a transparent or uniform background (contours, needs [opencv])
+detection:
+  mode: contours
+  background: auto
+  threshold: auto
+  min_area: 64
+  morphology: {open: 0, close: 1}

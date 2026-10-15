@@ -1,0 +1,29 @@
+# Example 3: the same sheet, but regions and masks declared by hand.
+# Detection (where) and masking (which silhouette) are independent:
+# the star is declared as a plain rectangle and masked as a star.
+version: 1
+input:
+  path: examples/input/shapes-sheet.png
+detection:
+  mode: manual
+  regions:
+    - id: oval
+      rect: [40, 90, 220, 270]          # [left, top, right, bottom], right/bottom exclusive
+      shape: ellipse
+    - id: star
+      rect: [230, 80, 430, 280]
+      shape: star
+      star: {points: 5, inner_ratio: 0.42}
+    - id: triangle
+      polygon: [[470, 270], [560, 80], [610, 270]]
+extraction:
+  shape: original                       # polygon regions keep their polygon
+  crop_padding: 2
+output:
+  directory: output/manual
+  format: png
+  naming: "{id}"
+preview:
+  enabled: true
+manifest:
+  enabled: true

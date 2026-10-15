@@ -1,0 +1,94 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "slicra"
+dynamic = ["version"]
+description = "Detect, slice and mask multiple regions of an image (grids, sprite sheets, irregular shapes) locally and deterministically."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Slicra contributors" }]
+keywords = ["image", "crop", "grid", "sprite-sheet", "mask", "contours", "slicing", "cli", "agent-skill"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Multimedia :: Graphics",
+  "Typing :: Typed",
+]
+dependencies = [
+  "pillow>=10.1",
+  "pydantic>=2.6",
+  "pyyaml>=6.0",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+opencv = ["numpy>=1.26", "opencv-python-headless>=4.8"]
+dev = [
+  "slicra[opencv]",
+  "pytest>=8",
+  "ruff>=0.6",
+  "mypy>=1.10",
+  "types-PyYAML",
+  "build>=1.2",
+]
+
+[project.scripts]
+slicra = "slicra.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/DailybotHQ/slicra"
+Issues = "https://github.com/DailybotHQ/slicra/issues"
+
+[tool.hatch.version]
+path = "src/slicra/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/slicra"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src",
+  "tests",
+  "examples",
+  "skills",
+  "README.md",
+  "README.es.md",
+  "LICENSE",
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = ["slow: builds/installs the package", "real: uses local sample images when present"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["B008"]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+python_version = "3.11"
+strict = true
+packages = ["slicra"]
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["cv2", "cv2.*"]
+ignore_missing_imports = true

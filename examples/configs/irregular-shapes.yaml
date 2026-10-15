@@ -1,0 +1,24 @@
+# Example 2: disjoint irregular shapes on a uniform background (needs slicra[opencv]).
+version: 1
+input:
+  path: examples/input/shapes-sheet.png
+detection:
+  mode: contours
+  background: auto
+  min_area: 400
+  threshold: auto
+  morphology:
+    open: 1
+    close: 1
+extraction:
+  shape: original
+  crop_padding: 4
+  antialias: true
+output:
+  directory: output/shapes
+  format: png
+  naming: "shape_{index:03d}"
+preview:
+  enabled: true
+manifest:
+  enabled: true

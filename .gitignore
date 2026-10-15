@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Generated example data and outputs (regenerate with: python examples/generate_fixtures.py)
+examples/input/
+output/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

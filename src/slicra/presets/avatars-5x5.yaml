@@ -1,0 +1,8 @@
+description: 5x5 avatar sheet with 12px gaps and no outer margin (explicit grid)
+detection:
+  mode: grid
+  rows: 5
+  cols: 5
+  margins: {left: 0, top: 0, right: 0, bottom: 0}
+  gap_x: 12
+  gap_y: 12

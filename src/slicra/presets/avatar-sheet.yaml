@@ -1,0 +1,6 @@
+description: Avatar/photo sheet on a light uniform background with irregular spacing (grid-auto, silhouette masks)
+detection:
+  mode: grid-auto
+  background: auto
+  tolerance: 24
+  silhouette: true

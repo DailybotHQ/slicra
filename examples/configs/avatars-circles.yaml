@@ -1,0 +1,16 @@
+# Same grid as example 1, exported as circular avatars: detection says "square cells",
+# extraction says "circle". Detected geometry never forces the output shape.
+version: 1
+input:
+  path: examples/input/avatars-grid.png
+detection:
+  mode: template
+  template: avatars-5x5
+extraction:
+  shape: circle
+  circle_fit: center-square
+output:
+  directory: output/avatar-circles
+  format: webp
+  quality: 90
+  naming: "avatar_r{row}c{col}"

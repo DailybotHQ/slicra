@@ -1,0 +1,21 @@
+# Example 4: real-world avatar sheets whose spacing is not perfectly regular.
+# grid-auto finds the separator rows/columns instead of assuming fixed gaps,
+# and `silhouette: true` lets shape `original` keep rounded tile corners.
+version: 1
+detection:
+  mode: grid-auto
+  background: auto
+  tolerance: 24
+  rows: 5            # optional safety check: fail instead of guessing
+  cols: 5
+  silhouette: true
+extraction:
+  shape: original
+output:
+  directory: output/avatar-sheets
+  format: png
+  naming: "{stem}_r{row}c{col}"
+preview:
+  enabled: true
+manifest:
+  enabled: true
